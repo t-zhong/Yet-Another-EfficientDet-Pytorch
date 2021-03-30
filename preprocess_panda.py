@@ -1,16 +1,54 @@
 # Author t-zhong
+# Created 2020/3/27
 
 """
-Simple script for calculating max. width and height of bbox.
+Simple script for splitting original images and converting anno to coco-style.
 """
-
+import glob
 import json
 import os
+import shutil
 
-import yaml
+import cv2
+import numpy as np
+from tqdm import tqdm
 
 
-base_dir = '/root/datasets/panda'
+def cvt_bbox(height, width, bbox):
+    """
+    Convert original annotation to coco style annotation.
+    """
+    return [
+        round(bbox['tl']['x'] * width, 2),
+        round(bbox['tl']['y'] * height, 2),
+        round((bbox['br']['x'] - bbox['tl']['x']) * width, 2),
+        round((bbox['br']['y'] - bbox['tl']['y']) * height, 2)
+    ]
+
+
+def in_region(obj, region):
+    """
+    Determine whether an object is in the given croped region.
+    obj: [x, y, w, h] region: [x1, y1, x2, y2]
+    """
+    x, y, w, h = obj
+    x1, y1, x2, y2 = region
+    if x1 <= x < x2 and y1 <= y < y2:
+        if x + w < x2 and y + h < y2:
+            return True
+    return False
+
+
+def shift_bbox(tl_x, tl_y, bbox):
+    return [
+        bbox[0] - tl_x,
+        bbox[1] - tl_y,
+        bbox[2],
+        bbox[3],
+    ]
+
+
+base_dir = os.path.expanduser('~/datasets/panda')
 annos_dir = os.path.join(base_dir, 'panda_round1_train_annos_202104')
 vehicle_path = os.path.join(annos_dir, 'vehicle_bbox_train.json')
 person_path = os.path.join(annos_dir, 'person_bbox_train.json')
@@ -21,54 +59,74 @@ with open(vehicle_path) as fp:
 with open(person_path) as fp:
     person_bboxs = json.load(fp)
 
-middle_xs, middle_ys = [], []
-max_w, max_h = .0, .0
-min_w, min_h = 1e9, 1e9
+images_list = glob.glob(os.path.join(
+    base_dir, 'panda_round1_train_202104_part?/*/*.jpg'))
 
-for image_path, values in vehicle_bboxs.items():
-    image_id = values['image id']
-    image_size = values['image size']
+# Preprocess vehicle objects.
+os.makedirs('datasets/panda_vehicle/annotations', exist_ok=True)
+os.makedirs('datasets/panda_vehicle/train', exist_ok=True)
+os.makedirs('datasets/panda_vehicle/val', exist_ok=True)
+
+val_ratio = 0.1
+
+train_images = []
+val_images = []
+# list contains annotations
+train_annotations = []
+val_annotations = []
+# id assigned to each bounding box
+id = -1
+
+
+def images_generator(images_list):
+    for image_path in images_list:
+        # yield image_path, cv2.imread(image_path)
+        yield image_path, np.zeros(1)
+
+
+images_list = images_list
+progress_bar = tqdm(images_generator(images_list), total=len(images_list))
+for index, (image_path, img) in enumerate(progress_bar):
+    split = 'val' if (index + 1) % int(1 / val_ratio) == 0 else 'train'
+    # img = cv2.imread(image_path)
+    # Getting the dict key in the annotation.
+    dict_key = '/'.join(image_path.split('/')[-2:])
+    vehicle_dict = vehicle_bboxs[dict_key]
+    image_size = vehicle_dict['image size']
     height, width = image_size['height'], image_size['width']
-    for obj in values['objects list']:
-        category = obj['category']
-        rect = obj['rect']
-        tl_x, tl_y = rect['tl']['x'], rect['tl']['y']
-        br_x, br_y = rect['br']['x'], rect['br']['y']
-        middle_xs.append((tl_x + br_x) / 2)
-        middle_ys.append((tl_y + br_y) / 2)
-        bbox_w, bbox_h = (br_x - tl_x) * width, (br_y - tl_y) * height
-        max_w, max_h = max(max_w, bbox_w), max(max_h, bbox_h)
-        min_w, min_h = min(min_w, bbox_w), min(min_h, bbox_h)
-        
+    image_id = vehicle_dict['image id']
+    vehicle_objects = vehicle_dict['objects list']
 
-print(f'max width of vehicle: {max_w}, max height of vehicle: {max_h}')
-print(f'min width of vehicle: {min_w}, min height of vehicle: {min_h}')
+    file_name = f'{image_id}_0x0.jpg'
+    # cv2.imwrite(f'datasets/panda_vehicle/{split}/{file_name}', img)
+    shutil.copy(image_path, f'datasets/panda_vehicle/{split}/{file_name}')
+    image_info = {'file_name': file_name,
+                  'height': height, 'width': width, 'id': image_id}
+    if split == 'train':
+        train_images.append(image_info)
+    else:
+        val_images.append(image_info)
 
-max_w, max_h = .0, .0
-min_w, min_h = 1e9, 1e9
+    all_objs = []
+    for obj in vehicle_objects:
+        if obj['category'] not in ['vehicles', 'unsure']:
+            all_objs.append({'category': 'visible car',
+                            'rect': cvt_bbox(height, width, obj['rect']), })
 
-for image_path, values in person_bboxs.items():
-    image_id = values['image id']
-    image_size = values['image size']
-    height, width = image_size['height'], image_size['width']
-    for obj in values['objects list']:
-        category = obj['category']
-        if category == 'person':
-            rects = obj['rects']
-            head = rects['head']
-            visible_body = rects['visible body']
-            full_body = rects['full body']
-            head_w = head['br']['x'] - head['tl']['x']
-            head_h = head['br']['y'] - head['tl']['y']
-            visible_body_w = visible_body['br']['x'] - visible_body['tl']['x']
-            visible_body_h = visible_body['br']['y'] - visible_body['tl']['y']
-            full_body_w = full_body['br']['x'] - full_body['tl']['x']
-            full_body_h = full_body['br']['y'] - full_body['tl']['y']
-            max_w = max(max_w, max(head_w, visible_body_w, full_body_w) * width)
-            max_h = max(max_h, max(head_h, visible_body_h, full_body_h) * height)
-            min_w = min(min_w, min(head_w, visible_body_w, full_body_w) * width)
-            min_h = min(min_h, min(head_h, visible_body_h, full_body_h) * height)
+    for obj in all_objs:
+        id += 1
+        anno = {'id': id, 'image_id': image_id, 'category_id': 1,
+                'segmentation': [], 'area': 0,  'bbox': obj['rect'], 'iscrowd': 0}
+        if split == 'train':
+            train_annotations.append(anno)
+        else:
+            val_annotations.append(anno)
 
-print(f'max width of person bbox: {max_w}, max height of person bbox: {max_h}')
-print(f'min width of person bbox: {min_w}, min height of person bbox: {min_h}')
-            
+categories = [{'supercategory': 'none', 'id': 1, 'name': 'visible car'}]
+with open('datasets/panda_vehicle/annotations/instances_train.json', 'w') as fp:
+    json.dump({'images': train_images, 'type': 'instances',
+              'annotations': train_annotations, 'categories': categories}, fp)
+
+with open('datasets/panda_vehicle/annotations/instances_val.json', 'w') as fp:
+    json.dump({'images': val_images, 'type': 'instances',
+              'annotations': val_annotations, 'categories': categories}, fp)

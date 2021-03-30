@@ -55,7 +55,7 @@ def get_args():
     parser.add_argument('--log_path', type=str, default='logs/')
     parser.add_argument('-w', '--load_weights', type=str, default=None,
                         help='whether to load weights from a checkpoint, set None to initialize, set \'last\' to load last checkpoint')
-    parser.add_argument('--saved_path', type=str, default='logs/')
+    parser.add_argument('--saved_path', type=str, default='logs/', help='the root folder of checkpoints')
     parser.add_argument('--debug', type=boolean_string, default=False,
                         help='whether visualize the predicted boxes of training, '
                              'the output images will be in test/')
@@ -109,6 +109,7 @@ def train(opt):
                   'collate_fn': collater,
                   'num_workers': opt.num_workers}
 
+    # Predefined in Paper 
     input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
     training_set = CocoDataset(root_dir=os.path.join(opt.data_path, params.project_name), set=params.train_set,
                                transform=transforms.Compose([Normalizer(mean=params.mean, std=params.std),

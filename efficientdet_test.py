@@ -58,7 +58,8 @@ x = x.to(torch.float32 if not use_float16 else torch.float16).permute(0, 3, 1, 2
 
 model = EfficientDetBackbone(compound_coef=compound_coef, num_classes=len(obj_list),
                              ratios=anchor_ratios, scales=anchor_scales)
-model.load_state_dict(torch.load(f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
+model.load_state_dict(torch.load(
+    f'weights/efficientdet-d{compound_coef}.pth', map_location='cpu'))
 model.requires_grad_(False)
 model.eval()
 
@@ -78,6 +79,7 @@ with torch.no_grad():
                       regressBoxes, clipBoxes,
                       threshold, iou_threshold)
 
+
 def display(preds, imgs, imshow=True, imwrite=False):
     for i in range(len(imgs)):
         if len(preds[i]['rois']) == 0:
@@ -89,15 +91,16 @@ def display(preds, imgs, imshow=True, imwrite=False):
             x1, y1, x2, y2 = preds[i]['rois'][j].astype(np.int)
             obj = obj_list[preds[i]['class_ids'][j]]
             score = float(preds[i]['scores'][j])
-            plot_one_box(imgs[i], [x1, y1, x2, y2], label=obj,score=score,color=color_list[get_index_label(obj, obj_list)])
-
+            plot_one_box(imgs[i], [x1, y1, x2, y2], label=obj, score=score,
+                         color=color_list[get_index_label(obj, obj_list)])
 
         if imshow:
             cv2.imshow('img', imgs[i])
             cv2.waitKey(0)
 
         if imwrite:
-            cv2.imwrite(f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
+            cv2.imwrite(
+                f'test/img_inferred_d{compound_coef}_this_repo_{i}.jpg', imgs[i])
 
 
 out = invert_affine(framed_metas, out)
