@@ -18,6 +18,7 @@ from utils.utils import preprocess, invert_affine, postprocess, STANDARD_COLORS,
 compound_coef = 0
 force_input_size = None  # set None to use default size
 img_path = 'test/img.png'
+img_path2 = 'test/shinjuku.jpg'
 
 # replace this part with your project's anchor config
 anchor_ratios = [(1.0, 1.0), (1.4, 0.7), (0.7, 1.4)]
@@ -47,7 +48,7 @@ color_list = standard_to_bgr(STANDARD_COLORS)
 # tf bilinear interpolation is different from any other's, just make do
 input_sizes = [512, 640, 768, 896, 1024, 1280, 1280, 1536, 1536]
 input_size = input_sizes[compound_coef] if force_input_size is None else force_input_size
-ori_imgs, framed_imgs, framed_metas = preprocess(img_path, max_size=input_size)
+ori_imgs, framed_imgs, framed_metas = preprocess(img_path, img_path2, max_size=input_size)
 
 if use_cuda:
     x = torch.stack([torch.from_numpy(fi).cuda() for fi in framed_imgs], 0)
@@ -106,23 +107,23 @@ def display(preds, imgs, imshow=True, imwrite=False):
 out = invert_affine(framed_metas, out)
 display(out, ori_imgs, imshow=False, imwrite=True)
 
-print('running speed test...')
-with torch.no_grad():
-    print('test1: model inferring and postprocessing')
-    print('inferring image for 10 times...')
-    t1 = time.time()
-    for _ in range(10):
-        _, regression, classification, anchors = model(x)
+# print('running speed test...')
+# with torch.no_grad():
+#     print('test1: model inferring and postprocessing')
+#     print('inferring image for 10 times...')
+#     t1 = time.time()
+#     for _ in range(10):
+#         _, regression, classification, anchors = model(x)
 
-        out = postprocess(x,
-                          anchors, regression, classification,
-                          regressBoxes, clipBoxes,
-                          threshold, iou_threshold)
-        out = invert_affine(framed_metas, out)
+#         out = postprocess(x,
+#                           anchors, regression, classification,
+#                           regressBoxes, clipBoxes,
+#                           threshold, iou_threshold)
+#         out = invert_affine(framed_metas, out)
 
-    t2 = time.time()
-    tact_time = (t2 - t1) / 10
-    print(f'{tact_time} seconds, {1 / tact_time} FPS, @batch_size 1')
+#     t2 = time.time()
+#     tact_time = (t2 - t1) / 10
+#     print(f'{tact_time} seconds, {1 / tact_time} FPS, @batch_size 1')
 
     # uncomment this if you want a extreme fps test
     # print('test2: model inferring only')

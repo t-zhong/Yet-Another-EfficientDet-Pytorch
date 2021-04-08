@@ -280,7 +280,7 @@ def from_colorname_to_bgr(color):
 
 def standard_to_bgr(list_color_name):
     standard = []
-    for i in range(len(list_color_name) - 36):  # -36 used to match the len(obj_list)
+    for i in range(len(list_color_name)):  # -36(dispreted) used to match the len(obj_list)
         standard.append(from_colorname_to_bgr(list_color_name[i]))
     return standard
 
